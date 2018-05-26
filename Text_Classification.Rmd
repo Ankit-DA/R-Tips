@@ -1,0 +1,544 @@
+---
+title: "Text Classification and Topic Modeling of Plane Crash Data using K-Means, LDA ((Latent Dirichlet Allocation)) and SVM (Support Vector Machine)"
+
+output: html_document
+---
+
+<style type="text/css">
+
+body, td {
+   font-family: Segoe UI Light;
+   font-size: 20px;
+}
+</style>
+
+###### In this Blog I will be Analysing the Plane Crash Data for Plane Crashes from 1908-2009. 
+
+In my previous [Blog](http://brazenly.blogspot.com/2016/04/r-visualizing-plan-crash-data-using.html), some interesting Visualizations and Text Mining were done on the Plane Crash data while in this article we would Predictive Modeling for Advanced Text Analytics to identify patterns in the Text Data.
+
+###### These are the various activities we would be doing as part of Analysis of Plane Crash Data
+
+1. K-Means Clustering of "Summary" field of Plane Crash Data
+2. Categorization/Classification of Plane Crashes using Supervised Predictive modeling technique (Support Vector Machine) using RTextTools package
+3. Topic Modeling of data (using lda) and Visualizing the same using LDAvis
+
+### Here is a brief introduction of Plane Crash Data for quick reference
+
+The Plane crash data covers -
+
+### Total Casualties : 113,830
+### Total Crashes : 5,268
+### Airlines : 268 
+### Aircraft Types : 2409
+### Countries : 373
+
+This aviation accident (plane crash) database includes: 
+  
+  1. All civil and commercial aviation accidents of scheduled and non-scheduled passenger airliners worldwide, which resulted in a fatality (including all U.S. Part 121 and Part 135 fatal accidents)
+
+  2. All cargo, positioning, ferry and test flight fatal accidents. 
+
+  3. All military transport accidents with 10 or more fatalities.
+
+  4. All commercial and military helicopter accidents with greater than 10 fatalities.
+
+  5. All civil and military airship accidents involving fatalities.
+
+  6. Aviation accidents involving the death of famous people. 
+
+  7. Aviation accidents or incidents of noteworthy interest.
+
+These are the fields available in the dataset 
+
+  1. Date:	       Date of accident,  in the format - January 01, 2001
+  2. Time:	       Local time, in 24 hr. format unless otherwise specified
+  3. Airline/Op: 	 Airline or operator of the aircraft
+  4. Flight :	     Flight number assigned by the aircraft operator
+  5. Route:	       Complete or partial route flown prior to the accident
+  6. AC Type:	     Aircraft type
+  7. Reg:	         ICAO registration of the aircraft
+  8. cn / ln:	     Construction or serial number / Line or fuselage number
+  9. Aboard:	     Total aboard (passengers / crew)
+  10. Fatalities:	 Total fatalities aboard (passengers / crew)
+  11. Ground:	     Total killed on the ground
+  12. Summary:	   Brief description of the accident and cause if known
+
+You can either search the web for this data or download it from this location : [Plane Crash Data](https://drive.google.com/uc?export=download&id=0BysOAoDBj2wKcEs1REF4QkkzU1k "Plane Crash Data")
+
+---------------------------------------------------------------------------------------------------------------------------
+
+Install/Load the required packages first 
+
+```{r  message=FALSE, warning=FALSE}
+EnsurePackage<-function(x)
+{
+  x<-as.character(x)
+  #
+  if (!require(x,character.only=TRUE))   # character.only tells require that x should have only character string
+  {
+    install.packages(pkgs=x,dependencies = TRUE)
+    require(x,character.only=TRUE)
+  }
+}
+#
+#
+# This function will add all the required R packages , for twitter analysis, to the Workspace
+#
+
+
+EnsurePackage("tm")              # For Text Mining of Data
+EnsurePackage("ggplot2")         # Excellent package for data visualization
+EnsurePackage("RTextTools")      # For predictive Text Classification using Supervised LEarning
+EnsurePackage("lda")             # For Topic Modeling using lda 
+EnsurePackage("LDAvis")          # For Topic Modeling Visualization
+EnsurePackage("servr")           # For JSONising the data
+#
+```
+
+Let us first get the Plane Crash Data in a Data Frame.
+
+
+```{r, message=FALSE, warning=FALSE}
+#
+#URL<-"https://drive.google.com/uc?export=download&id=0BysOAoDBj2wKcEs1REF4QkkzU1k"
+#
+# Change the location/address in "destfile =" parameter based on your system folder/directory structure
+#
+#download.file(URL, destfile = "C://PB Backup//R//Plane_Data.csv")
+#
+# Use the above 2 commented code lines should you wish to directly read the csv file from the web location
+#
+test<-read.csv('C://PB Backup//R//Plane_Data.csv', header=TRUE, stringsAsFactors=FALSE)
+#
+# Let us see how the data looks
+#
+str(test)
+#
+head(test,10)
+#
+# Initialize a variable using the Summary data 
+#
+CrashSummary<-test$Summary
+#
+head(CrashSummary)
+#
+# Let us do some Data Cleansing on the Summary Data
+#
+# Remove extra spaces from the data
+#
+CrashSummary<-gsub("  "," ",CrashSummary)
+#
+#
+# remove punctuation symbols
+#
+CrashSummary = gsub("[[:punct:]]", "", CrashSummary)
+#
+# remove numbers
+#
+CrashSummary = gsub("[[:digit:]]", "", CrashSummary)
+#
+# remove hyperlinks (if any)
+#
+CrashSummary = gsub("http\\w+", "", CrashSummary)
+#
+# As we would be doing the Text Analysis of the "Summary" field first, let us create a dataframe out of Cleansed "Summary" field 
+#
+inputdf<-as.data.frame(CrashSummary,stringsAsFactors = FALSE)
+#
+# Let us change the column name from "Summary" to "text" (the purpose of doing some such redundant tasks, like column rename, is to understand how different commands work in R)
+#
+colnames(inputdf)[1]<-'text'
+#
+```
+
+Now we have the dataframe "inputdf" that had the Clean "Summary" data for the Plane Crashes. Let us now perform some basic Text Mining activities on the SUmmary Data like -
+
+1. Creating Term-Document matrix (TDM)
+
+2. Removing some redundant terms from the TDM
+
+3. Perform further cleaning of data for Text Mining (like stopwords removal, case conversion etc.)
+
+
+```{r  message=FALSE, warning=FALSE}
+#
+# Create a Corpus from the text field in the dataframe (text field carries the "Summary" data of plane crashes)
+#
+text_corpus = Corpus(VectorSource(inputdf$text))
+#
+#
+# convert to lower case
+#
+text_corpus = tm_map(text_corpus, content_transformer(tolower))
+#
+# remove stoprwords (stopwords like a, at, and , the etc)
+#
+text_corpus = tm_map(text_corpus, removeWords, c(stopwords("english")))
+#
+# Remove commonly occurring words like crash, flight etc.
+#
+text_corpus = tm_map(text_corpus, removeWords, c('flight',  'aircraft' , 'plane' , 'crashed'))
+#
+# remove extra white-spaces (though we already did earlier, however this time doing it using tm_map command from tm package)
+#
+text_corpus = tm_map(text_corpus, stripWhitespace)
+#
+# Create term-document matrix from the corpus using TermDocumentMatrix function of tm package
+tdm = TermDocumentMatrix(text_corpus)
+#
+
+```
+
+
+## K-means Clustering of the terms
+
+We can perform Unsupervised clustering of the terms using K-means clustring method to identify the closeness of each term to different clusters (in our case, we would use 6 clusters)
+
+Here is a simple method of performing K-means clustering and viewing the results.
+
+```{r  message=FALSE, warning=FALSE}
+#
+# Let us create a Term-Document matrix with words having sparsity less than 99 percentile 
+#
+# Remove sparse terms
+tdm2<-removeSparseTerms(tdm,sparse=0.99)
+#
+m2<-as.matrix(tdm2)
+#
+# Now create a Document-Term matrix which is simply a transpose of Term-Document Matrix (K-means clustering requires Document-Term Matrix to assign terms to documents)
+#
+# Transpose the matrix m2
+#
+m3<-t(m2)
+#
+# Declare number of clusters again (though we declared this earlier as well)
+#
+k<-6 # number of clusters
+#
+# Execute k-means on the Document-Term matrix for 6 clusters
+#
+#
+kmeansResult<-kmeans(m3,k)
+#
+# Round the cluster centers to 3 digits to make them more legible
+#
+Cluster_Probability<-round(kmeansResult$centers,digits=3)
+#
+# Variable Cluster_Probability gives us a probabilistic estimate for occurence of a term in a particular cluster. Let us see the output for few of the terms to get more clarity
+# 
+head(Cluster_Probability,20)
+#
+```
+
+## Topic Modeling using LDA (Latent Dirichlet Allocation)
+
+This is a little more advanced way of identifying hidden topics within the mesh of words.LDA is a technique that facilitates the automatic discovery of themes in a collection of documents.
+
+The basic assumption behind LDA is that each of the documents in a collection consist of a mixture of collection-wide topics. However, in reality we observe only documents and words, not topics - the latter are part of the hidden (or latent) structure of documents. The aim is to infer the latent topic structure given the words and document.  LDA does this by recreating the documents in the corpus by adjusting the relative importance of topics in documents and words in topics iteratively.
+
+Here's a brief explanation of how the algorithm works -
+
+1. Go through each document, and randomly assign each word in the document to one of the K topics. (Note: One of the shortcomings of LDA is that one has to specify the number of topics, denoted by K, upfront. More about this later.)
+
+2. This assignment already gives you both topic representations of all the documents and word distributions of all the topics (albeit not very good ones).
+
+3. So to improve on them, for each document d.
+
+4. ..Go through each word w in d.
+
+5. ....And for each topic t, compute two things: 1) p(topic t | document d) = the proportion of words in document d that are currently assigned to topic t, and 2) p(word w | topic t) = the proportion of assignments to topic t over all documents that come from this word w. Reassign w a new topic, where you choose topic t with probability p(topic t | document d) * p(word w | topic t) (according to our generative model, this is essentially the probability that topic t generated word w, so it makes sense that we resample the current word's topic with this probability).  (Note: p(a|b) is the [conditional probability](https://www.mathsisfun.com/data/probability-events-conditional.html) of a given that b has already occurred - see [this post](https://eight2late.wordpress.com/2010/02/01/fooled-by-conditionality/) for more on conditional probabilities)
+
+6. ....In other words, in this step, we're assuming that all topic assignments except for the current word in question are correct, and then updating the assignment of the current word using our model of how documents are generated.
+
+7. After repeating the previous step a large number of times, you'll eventually reach a roughly steady state where your assignments are pretty good. So use these assignments to estimate the topic mixtures of each document (by counting the proportion of words assigned to each topic within that document) and the words associated to each topic (by counting the proportion of words assigned to each topic overall).
+
+The iterative process described in the last point above is implemented using a technique called Gibbs sampling.
+
+As a general point, I should also emphasize that you do not need to understand the ins and outs of an algorithm to use it but it does help to understand, at least at a high level, what the algorithm is doing. One needs to develop a feel for algorithms even if one doesn't understand the details. Indeed, most people working in analytics do not know the details of the algorithms they use, but that doesn't stop them from using algorithms intelligently. Purists may disagree while I think they are wrong.
+
+Enough of theory, let us now perform Topic-Modeling using lda and also create some beautiful visualization for the Topics using [LDAvis](https://github.com/cpsievert/LDAvis/) package.
+
+```{r  message=FALSE, warning=FALSE}
+#
+# Let us perform some data cleansing functions again to prepare data in form as required for lda
+#
+# This gives list of english stop words from the SMART information retrieval system, available in the R package tm.Just another usage of tm for your reference
+#
+stop_words <- stopwords("SMART")
+#
+# Declare a temporary dataframe "input" and place all plane crash records there from our original input dataframe "test"
+#
+input<-test
+#
+# Let us use our CrashSummary that we defined initially carrying cleaned version of "Summary" data
+#
+# tokenize on space and output as a list
+#
+doc.list <- strsplit(CrashSummary, "[[:space:]]+")
+#
+
+# compute the table of terms for creating a table for each term and its corresponding count of occurrences
+#
+term.table <- table(unlist(doc.list))
+term.table <- sort(term.table, decreasing = TRUE)
+#
+# Let us see how the term table looks
+#
+head(term.table)
+#
+
+
+# remove terms that are stop words or occur fewer than 100 times
+#
+del <- names(term.table) %in% stop_words | term.table < 100
+term.table <- term.table[!del]
+vocab <- names(term.table)
+#
+#
+
+# now put the documents into the format required by the lda package (it requires list format of document-term matrix)
+#
+get.terms <- function(x) {
+  index <- match(x, vocab)
+  index <- index[!is.na(index)]
+  rbind(as.integer(index - 1), as.integer(rep(1, length(index))))
+}
+#
+#
+documents <- lapply(doc.list, get.terms) # This gives the list output
+#
+
+
+# Compute some statistics related to the data set
+#
+D <- length(documents)  # number of documents (5,268)
+#
+W <- length(vocab)  # number of terms in the vocab (133)
+#
+doc.length <- sapply(documents, function(x) sum(x[2, ]))  # number of tokens per document [11,3, 4...]
+#
+head(doc.length,20)
+#
+
+N <- sum(doc.length)  # total number of tokens/terms in the data (45,767)
+
+#
+term.frequency <- as.integer(term.table) # Frequency of each of the 133 terms
+#
+term.frequency
+
+```
+
+Now we have prepared the data. The next step is to set up a topic model with 6 topics, relatively diffuse priors for the topic-term distributions (eta = 0.02) and document-topic distributions (alpha = 0.02), and we set the collapsed Gibbs sampler (G) to run for 5,000 iterations (slightly conservative to ensure convergence). 
+
+*We will also capture time it takes to run lda on this relatively small size data *
+
+```{r  message=FALSE, warning=FALSE}
+#
+# Model tuning parameters
+#
+K <- 6 
+G <- 5000     # Number of iterations to arrive at convergence 
+alpha <- 0.02
+eta <- 0.02
+
+#
+# Fit the model
+#
+set.seed(357)
+#
+# Capture start time from your system
+#
+t1 <- Sys.time()
+#
+# Begin lda execution
+#
+fit <- lda.collapsed.gibbs.sampler(documents = documents, K = K, vocab = vocab, 
+                                   num.iterations = G, alpha = alpha, 
+                                   eta = eta, initial = NULL, burnin = 0,
+                                   compute.log.likelihood = TRUE)
+#
+# Capture end-time from your system
+#
+t2 <- Sys.time()
+#
+# Notice the time it took to complete lda on this data (Use this technique whenever you want to check the execution time for an algorithm/piece of code)
+#
+t2 - t1  # about 24 minutes on laptop
+#
+
+```
+
+
+We would now visualize the results using LDAvis package which gives an excellent interactive visualization of data . I would highly encourage readers to try LDAvis with different datasets for Topic Modeling visualization as it comes with some real cool visuals.
+
+
+Before creating the Visualization, we would estimate the document-topic distributions, which we denote by theta, and the set of topic-term distributions, which we denote by phi.
+
+We estimate the "smoothed" versions of these distributions ("smoothed" means that we've incorporated the effects of the priors into the estimates) by cross-tabulating the latent topic assignments from the last iteration of the collapsed Gibbs sampler with the documents and the terms, respectively, and then adding pseudocounts according to the priors.
+
+No need to get too much into the details of theta and phi. Simply execute these 2 lines of code for preparing for Visualization.
+
+```{r  message=FALSE, warning=FALSE}
+#
+theta <- t(apply(fit$document_sums + alpha, 2, function(x) x/sum(x)))
+#
+phi <- t(apply(t(fit$topics) + eta, 2, function(x) x/sum(x)))
+#
+```
+
+We would now save number of tokens per document and the frequency of the terms along with phi, theta, and vocab, in a list as the data object PlaneCrashes.
+
+```{r  message=FALSE, warning=FALSE}
+
+PlaneCrashes <- list(phi = phi,
+                     theta = theta,
+                     doc.length = doc.length,
+                     vocab = vocab,
+                     term.frequency = term.frequency)
+
+```
+
+Now we're ready to call the createJSON() function in LDAvis. This function will return a character string representing a JSON object used to populate the visualization. The createJSON() function computes topic frequencies, inter-topic distances, and projects topics onto a two-dimensional plane to represent their similarity to each other.
+
+```{r  message=FALSE, warning=FALSE}
+#
+json <- createJSON(phi = PlaneCrashes$phi, 
+                   theta = PlaneCrashes$theta, 
+                   doc.length = PlaneCrashes$doc.length, 
+                   vocab = PlaneCrashes$vocab, 
+                   term.frequency = PlaneCrashes$term.frequency)
+
+#
+
+```
+
+The serVis() function can take json and serve the result in a variety of ways.You can either 
+1. view the result in the browser or 
+
+2. upload the result on github or 
+
+3. create a directory/folder with all HTML/CSS/js files and host this as a webpage to view results. 
+
+We would use the third option to ember the URL of the website in the blog making it interactive within the blog. I'll write json to a file within the 'ankit' directory (along with other HTML and JavaScript required to render the page).
+
+```{r  message=FALSE, warning=FALSE}
+#
+serVis(json, out.dir = 'vis', open.browser = FALSE)
+#
+```
+
+The directory/folder created ("Ankit" in my case) as a result of execution of serVis command would comprise of following 5 files -
+
+- index.html
+- d3.v3.js
+- lda.css
+- lda.json
+- ldavis.js
+
+Now the tricky part is the interactive LDAvis output to the blog . Since we have come this far, let us do this as well.
+
+Here is the trick to do this :
+
+1. Create a zipped file of the folder (**Ankit** in our case)
+
+2. Then [click here](https://script.google.com/macros/s/AKfycbz7Mb1OJWnFz_osp7K9G_4wesHlzyPZYOtbBFu--prJj1Hb1C83/exec) to upload that zip file to your Google Drive (You may also use DropBox or any other way to host it).
+
+The script will upload your zipped file to your google drive account and generate the URL for the webpage which you could share with your friends/colleagues or embed in your website/blog (which I would do here using iframe tags)
+
+Here is the visualization -
+
+<iframe width="100%" frameborder="0" src="https://42f93f181ac3b846462053c52d3fed99863a4c8a.googledrive.com/host/0BysOAoDBj2wKRnJGMi1mRzdTYlU/Ankit/index.html" height="100%"></iframe>
+
+
+
+## Text Classification using Supervised Learning Support Vector Machine(SVM)
+
+The last one is the Text Classification for the records which were not categorized . Here we would use **RTextTools** package utlizing Support Vector Machine algorithm for supervised learning based on the categorized records to classify the uncategorized records.
+
+These are the Categories we have used -
+
+- Military/Defense Action
+- Manual/Pilot Error
+- Meteorological
+- Topographic
+- Extremist Activity
+- Equipment Failure
+
+Rest of the records will be Categorized as "Unknown"
+
+In the previous [Blog](http://brazenly.blogspot.in/2016/04/r-visualizing-plan-crash-data-using.html) we assigned the base categories to Plane Crash data records using the "keyword" search from the "Summary" field. Just for quick referece, these are the type of commands we used for Categorization using "keyword" search in Summary field 
+
+```{r  message=FALSE, warning=FALSE}
+# Assign base categories first using commonly occurring terms
+#
+df<-test
+df$Category<-NA
+df[grep("shot down", df$Summary), "Category"] <- "Military/Defense Action"
+df[grep("crashed.*take.*off.* | navigation.*error.*", df$Summary), "Category"] <- "Manual/Pilot Error"
+df[grep("fog | storm | tornado", df$Summary), "Category"] <- "Meteorological"
+df[grep("mountain | hill | tornado", df$Summary), "Category"] <- "Topographic"
+df[grep("terrorist | hijack | suicide", df$Summary), "Category"] <- "Extremist Activity"
+df[grep("engine.*failure | broken.*wing", df$Summary), "Category"] <- "Equipment Failure" 
+df[grep("missing | dis.*appear", df$Summary), "Category"] <- "Unknown" 
+
+```
+
+
+Now based on the records classified using the above methodology, we would create a Supervised model and predict the categories for the uncategorized records.
+
+
+```{r  message=FALSE, warning=FALSE}
+#
+# Traindata is the data comprising of those records where the plane crash has been categorized
+#
+traindata <- as.data.frame(df[complete.cases(df),]);
+#
+# Testdata comprises of records which are to be categorized
+#
+testdata <- as.data.frame(df[!complete.cases(df),]);
+#
+df<-data.frame(rbind(traindata,testdata))
+#
+# Create Document Term Matrix
+#
+doc_matrix <- create_matrix(df$Summary, language="english", removeNumbers=TRUE,
+stemWords=TRUE, removeSparseTerms=.90)
+#
+doc_matrix
+#
+# In order to train a SVM model with RTextTools, we need to put the document term matrix inside a container. In the container's configuration, we indicate that the training set and test set.
+#
+container <- create_container(doc_matrix, df$Category, trainSize=1:nrow(traindata),
+testSize=(nrow(traindata)+1):nrow(doc_matrix), virgin=TRUE)
+#
+# train a SVM Model
+#
+SVM <- train_model(container,"SVM")
+#
+SVM_CLASSIFY <- classify_model(container, SVM)
+#
+# Convert factors to characters
+#
+SVM_CLASSIFY <- transform(SVM_CLASSIFY, SVM_LABEL = as.character(SVM_LABEL))
+#
+head(SVM_CLASSIFY,20)
+#
+# As we could see, SVM_CLASSIFY comprises of the label predicted and its probability
+#
+# Now update the Category field in testdata with the predicted values
+#
+testdata$Category<-SVM_CLASSIFY$SVM_LABEL
+# 
+# Final complete dataframe with all records categorized will be
+#
+finaldf<-data.frame(rbind(traindata,testdata))
+#
+
+```
+
+
+
+
+
+

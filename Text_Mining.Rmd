@@ -1,0 +1,418 @@
+---
+title: "Text Mining and Detailed Analysis of Plane Crash Data"
+
+output: html_document
+---
+
+<style type="text/css">
+
+body, td {
+   font-family: Segoe UI Light;
+   font-size: 20px;
+}
+</style>
+
+#### In this Blog I will be Analysing the Plane Crash Data for Plane Crashes from 1908-2009. 
+
+In my previous [Blog](http://brazenly.blogspot.com/2016/04/r-visualizing-plan-crash-data-using.html), some interesting Visualizations were done on the Plane Crash data while in this article we would slice-dice-cut the Plane Crash data using Text Analytics (Basic and Advanced) covering lot of different techniques to analyse Text Data.
+
+#### These are the various activities we would be doing as part of Analysis of Plane Crash Data
+
+1. Identify most frequently occuring terms in the "Summary" of Plane Crash Data
+2. Performing Clustering of the Frequently occuring Terms using Hierarchical CLustering 
+3. Creating Dendrogram and Wordcloud
+4. Creating Adjancency Matrix and network graph
+5. Bar-graph visualization of frequently occuring terms
+
+
+### Here is a brief introduction of Plane Crash Data for quick reference
+
+The Plane crash data covers -
+
+### Total Casualties : 113,830
+### Total Crashes : 5,268
+### Airlines : 268 
+### Aircraft Types : 2409
+### Countries : 373
+
+This aviation accident (plane crash) database includes: 
+  
+  1. All civil and commercial aviation accidents of scheduled and non-scheduled passenger airliners worldwide, which resulted in a fatality (including all U.S. Part 121 and Part 135 fatal accidents)
+
+  2. All cargo, positioning, ferry and test flight fatal accidents. 
+
+  3. All military transport accidents with 10 or more fatalities.
+
+  4. All commercial and military helicopter accidents with greater than 10 fatalities.
+
+  5. All civil and military airship accidents involving fatalities.
+
+  6. Aviation accidents involving the death of famous people. 
+
+  7. Aviation accidents or incidents of noteworthy interest.
+
+These are the fields available in the dataset 
+
+  1. Date:	       Date of accident,  in the format - January 01, 2001
+  2. Time:	       Local time, in 24 hr. format unless otherwise specified
+  3. Airline/Op: 	 Airline or operator of the aircraft
+  4. Flight :	     Flight number assigned by the aircraft operator
+  5. Route:	       Complete or partial route flown prior to the accident
+  6. AC Type:	     Aircraft type
+  7. Reg:	         ICAO registration of the aircraft
+  8. cn / ln:	     Construction or serial number / Line or fuselage number
+  9. Aboard:	     Total aboard (passengers / crew)
+  10. Fatalities:	 Total fatalities aboard (passengers / crew)
+  11. Ground:	     Total killed on the ground
+  12. Summary:	   Brief description of the accident and cause if known
+
+You can either search the web for this data or download it from this location : [Plane Crash Data](https://drive.google.com/uc?export=download&id=0BysOAoDBj2wKcEs1REF4QkkzU1k "Plane Crash Data")
+
+---------------------------------------------------------------------------------------------------------------------------
+
+Install/Load the required packages first 
+
+```{r  message=FALSE, warning=FALSE}
+EnsurePackage<-function(x)
+{
+  x<-as.character(x)
+  #
+  if (!require(x,character.only=TRUE))   # character.only tells require that x should have only character string
+  {
+    install.packages(pkgs=x,dependencies = TRUE)
+    require(x,character.only=TRUE)
+  }
+}
+#
+#
+# This function will add all the required R packages , for twitter analysis, to the Workspace
+#
+
+EnsurePackage("wordcloud")       # Required to create a Wordcloud
+EnsurePackage("tm")              # For Text Mining of Data
+EnsurePackage("ggplot2")         # Excellent package for data visualization
+EnsurePackage("RColorBrewer")    # For using different colrs in the Wordcloud
+EnsurePackage("ape")             # For preparing different types of Dendrograms 
+EnsurePackage("igraph")          # For network graph
+
+#
+```
+
+Let us first get the Plane Crash Data in a Data Frame.
+
+
+```{r, message=FALSE, warning=FALSE}
+#
+#URL<-"https://drive.google.com/uc?export=download&id=0BysOAoDBj2wKcEs1REF4QkkzU1k"
+#
+# Change the location/address in "destfile =" parameter based on your system folder/directory structure
+#
+#download.file(URL, destfile = "C://PB Backup//R//Plane_Data.csv")
+#
+# Use the above 2 commented code lines should you wish to directly read the csv file from the web location
+#
+test<-read.csv('C://PB Backup//R//Plane_Data.csv', header=TRUE, stringsAsFactors=FALSE)
+#
+# Let us see how the data looks
+#
+str(test)
+#
+head(test,10)
+#
+# Initialize a variable using the Summary data 
+#
+CrashSummary<-test$Summary
+#
+head(CrashSummary)
+#
+# Let us do some Data Cleansing on the Summary Data
+#
+# Remove extra spaces from the data
+#
+CrashSummary<-gsub("  "," ",CrashSummary)
+#
+#
+# remove punctuation symbols
+#
+CrashSummary = gsub("[[:punct:]]", "", CrashSummary)
+#
+# remove numbers
+#
+CrashSummary = gsub("[[:digit:]]", "", CrashSummary)
+#
+# remove hyperlinks (if any)
+#
+CrashSummary = gsub("http\\w+", "", CrashSummary)
+#
+# As we would be doing the Text Analysis of the "Summary" field first, let us create a dataframe out of Cleansed "Summary" field 
+#
+inputdf<-as.data.frame(CrashSummary,stringsAsFactors = FALSE)
+#
+# Let us change the column name from "Summary" to "text" (the purpose of doing some such redundant tasks, like column rename, is to understand how different commands work in R)
+#
+colnames(inputdf)[1]<-'text'
+#
+```
+
+Now we have the dataframe "inputdf" that had the Clean "Summary" data for the Plane Crashes. Let us now perform some basic Text Mining activities on the SUmmary Data like -
+
+1. Creating Term-Document matrix (TDM)
+
+2. Removing some redundant terms from the TDM
+
+3. Perform further cleaning of data for Text Mining (like stopwords removal, case conversion etc.)
+
+
+```{r  message=FALSE, warning=FALSE}
+#
+# Create a Corpus from the text field in the dataframe (text field carries the "Summary" data of plane crashes)
+#
+text_corpus = Corpus(VectorSource(inputdf$text))
+#
+#
+# convert to lower case
+#
+text_corpus = tm_map(text_corpus, content_transformer(tolower))
+#
+# remove stoprwords (stopwords like a, at, and , the etc)
+#
+text_corpus = tm_map(text_corpus, removeWords, c(stopwords("english")))
+#
+# Remove commonly occurring words like crash, flight etc.
+#
+text_corpus = tm_map(text_corpus, removeWords, c('flight',  'aircraft' , 'plane' , 'crashed'))
+#
+# remove extra white-spaces (though we already did earlier, however this time doing it using tm_map command from tm package)
+#
+text_corpus = tm_map(text_corpus, stripWhitespace)
+#
+# Create term-document matrix from the corpus using TermDocumentMatrix function of tm package
+tdm = TermDocumentMatrix(text_corpus)
+#
+
+```
+
+## Creating Dendrogram using Hierarchical CLustering
+
+Let us create a Dendrogram to display the most commonly occuring words and their relative distance(similarity) based on their occurrences in the Summary Data. 
+
+
+```{r  message=FALSE, warning=FALSE}
+#
+# First create a matrix from the dataframe as hierarchical clustring can be done on a matrix only
+#
+m = as.matrix(tdm)
+#
+#
+# Because of large number of terms in our "Summary" data, for convenience and to avoid cluttering, let's keep those words that have a frequency > 99 percentile Or in other words that are less than 1% sparse
+#
+# remove sparse terms (word frequency > 99% percentile)
+#
+wf = rowSums(m)
+m1 = m[wf>quantile(wf,probs=0.99), ]
+#
+# remove columns with all zeros (that is those documents/columns which do not include any term that has frequency > 99% percentile)
+m1 = m1[,colSums(m1)!=0]
+#
+# For convenience, every matrix entry must be binary (0 or 1) so convert any value greater than 1 to 1.This is one way to make sure that if any term is repeated in a row in the "Summary" data, still we count it only once
+#
+m1[m1 > 1] = 1
+#
+#
+# Lets keep exploring by applying a cluster analysis and discover more about groups of words
+#
+# Create a Distance matrix with binary distance ("Binary"" method is used as the terms carry a value 0 or 1 in the columns/documents and using "Binary" would give us relative similarity of those terms that have higher probability of occuring together in a record/column/document. )
+#
+m1dist = dist(m1, method="binary")
+#
+# Create cluster with ward method (not the right time and place to get into the details of "ward" algorithm :-) )
+#
+clus1 = hclust(m1dist, method="ward.D")
+#
+# plot dendrogram
+#
+plot(clus1, cex=0.7)
+#
+# Divide the Dendrogram into  different clusters (Using 6 clusters as we would notice in a while that we will categorize Plane Crashes into 6 categories though you can try different number of clusters by changing number in  "k=6" parameter)
+#
+rect.hclust(clus1, k=6, border="red")
+```
+
+## Cyclic Dendrogram using ape package
+
+This is just another representation of Dendrogram using as.phylo function from **ape** package (We are doing an inustice to ape package by using it just for creating a dendrogram as it is used heavily in advance computing but that is another topic.)
+
+Let us create Cyclic Dendrogram
+
+```{r  message=FALSE, warning=FALSE}
+#
+# Plot cyclic Dendrogram 
+#
+plot(as.phylo(clus1), type = "fan", tip.color = hsv(runif(15, 0.65, 0.95), 1, 1, 0.7), edge.color = hsv(runif(10, 0.65, 0.75), 1, 1, 0.7), edge.width = runif(20,0.5, 3), use.edge.length = TRUE, col = "gray80")
+```
+
+## Wordcloud 
+
+The next one in line is the Wordcloud which is used most commonly in Text Mining .
+
+Wordcloud works on Data-frames unlike Dendrogram. As we already have the Term-Document Matrix, plaotting wordcloud is pretty simple now with few code lines.
+
+```{r  message=FALSE, warning=FALSE}
+#
+# Sort the Words in Descending order of their frequencies so that the one with highest frequency (which inevitably means more significance) gets plotted first
+#
+word_freqs = sort(rowSums(m1), decreasing=TRUE)
+#
+# Create dataframe from the term-document matrix m1 that we prepared while plotting dendrogram
+#
+matdf<- data.frame(word=names(word_freqs), freq=word_freqs)
+#
+# Plot the wordcloud 
+#
+wordcloud(matdf$word, matdf$freq, random.order=FALSE, colors=brewer.pal(8, "Dark2"))
+```
+
+## Bar-graph of most frequently occuring terms
+
+Let us try and explore another perspective of the Text data using heat-map (with the help of ggplot2 package) where we would generate a bar-graph of the terms based on their respective frequencies. We would pick only those terms that have a frequency of more than 200 as it would otherwise clutter the graph.
+
+```{r  message=FALSE, warning=FALSE}
+#
+#
+# First let us simply inspect and print most frequently occuring terms which occur at least in 100 records in the plane crash data
+#
+(freq.terms <- findFreqTerms(tdm, lowfreq=100))
+#
+# Let us build a dataframe with 2 columns: Term and its Frequency
+#
+#
+term.freq<-rowSums(as.matrix(tdm))
+#
+# Pick only those terms that have frequency greater than 200
+#
+term.freq<-subset(term.freq,term.freq >=200)
+#
+df<-data.frame(term=names(term.freq),freq=term.freq)
+#
+# Plot Bar-Graph for most frequently used words .
+#
+ggplot(df, aes(x=term,y=freq))+geom_bar(stat="identity")+xlab("Terms")+ylab("Count")+coord_flip()+
+    labs(title="Frequency Distribution of Words/Terms in Plane Crash Data", x="Frequency of the term", y="Word/Term in Plane Crash Data")
+#
+#
+```
+
+
+Well, I agree,  there is nothing too special about this graph. However, how about taking this opportunity to learn some customization techniques for building beautiful graph using ggplot2? Well, I will not spend too much time into this, but at the same time I would costruct a function with various parameters used in ggplot2 graph which you may play around with to design some wonderful graphs.
+
+Here is the code of the function and the modified ggplot2 graph (just for fun).
+
+
+```{r  message=FALSE, warning=FALSE}
+#
+# This is the function with various ggplot2 parameters that can be customized
+#
+ggplot_theme <- function() {
+    
+    # Generate the colors for the chart procedurally with RColorBrewer
+    palette <- brewer.pal("Greys", n=9)
+    color.background = "white" #palette[2]
+    color.grid.major = palette[3]
+    color.axis.text = palette[6]
+    color.axis.title = palette[7]
+    color.title = palette[9]
+    
+    # Begin construction of chart
+    theme_bw(base_size=9) +
+        
+        # Set the entire chart region to a light gray color
+        theme(panel.background=element_rect(fill=color.background, color=color.background)) +
+        theme(plot.background=element_rect(fill=color.background, color=color.background)) +
+        theme(panel.border=element_rect(color=color.background)) +
+        
+        # Format the grid
+        theme(panel.grid.major=element_line(color=color.grid.major,size=.25)) +
+        theme(panel.grid.minor=element_blank()) +
+        theme(axis.ticks=element_blank()) +
+        
+        # Format the legend, but hide by default
+        theme(legend.position="none") +
+        theme(legend.background = element_rect(fill=color.background)) +
+        theme(legend.text = element_text(size=7,color=color.axis.title)) +
+        
+        # Set title and axis labels, and format these and tick marks
+        theme(plot.title=element_text(color=color.title, size=12, vjust=1.25)) +
+        theme(axis.text.x=element_text(size=7,color=color.axis.text)) +
+        theme(axis.text.y=element_text(size=7,color=color.axis.text)) +
+        theme(axis.title.x=element_text(size=10,color=color.axis.title, vjust=0)) +
+        theme(axis.title.y=element_text(size=10,color=color.axis.title, vjust=1.25)) +
+        
+        # Plot margins
+        theme(plot.margin = unit(c(0.35, 0.2, 0.3, 0.35), "cm"))
+}
+#
+# Here is the modified version of bar-graph using ggplot_theme function
+#
+ggplot(df, aes(x=term,y=freq))+geom_bar(stat="identity",fill="#c0392b",alpha=0.75)+xlab("Terms")+ylab("Count")+coord_flip()+    ggplot_theme() +    labs(title="Frequency Distribution of Words/Terms in Plane Crash Data", x="Frequency of the term", y="Words/Terms Summary Field in Plane Crash Data")
+```
+
+
+## Network Graph Analysis of the Text Data
+
+Well I am sure it has been an exhaustive yet interesting journey so far. I am soon going to end it with couple of other methods of analysing the text. Here I will do the Network Analysis of the graph showing how various terms are connected to each other.
+
+```{r  message=FALSE, warning=FALSE}
+#
+# Let us create a Term-Document matrix with words having sparsity less than 90 percentile (terms that are present in more than 10% of the records) to make the network graph readable and avoid term overlapping
+#
+tdm3<-removeSparseTerms(tdm,sparse=0.90)
+#
+m3<-as.matrix(tdm3)
+#
+# First build the adjacency matrix
+#
+termMatrix <- m3 %*% t(m3)
+#
+# Let us see how termMatrix looks
+#
+head(termMatrix[1:8,1:8])
+#
+# Thereafter generate the node edge list
+#
+desired <- as.data.frame(as.table(termMatrix))
+desired <- subset(desired,Terms != Terms.1)
+#
+str(desired)
+#
+head(desired,20)
+#
+# Prepare Network Graph Data
+#
+# build a graph from the above matrix
+#
+g <- graph.adjacency(termMatrix, weighted=T, mode = "undirected")
+#
+# remove loops
+#
+g <- simplify(g)
+#
+# set labels and degrees of vertices
+#
+V(g)$label <- V(g)$name
+V(g)$degree <- degree(g)
+# 
+# Select  layout.fruchterman.reingold graph
+#
+layout1 <- layout.fruchterman.reingold(g)
+#
+plot(g, layout=layout1)
+#
+
+```
+
+
+
+
+
+
+

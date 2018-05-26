@@ -1,0 +1,327 @@
+---
+title: "Visualizing Flight Paths on a 3-D Interactive Earth Visual"
+author: "Ankit Agarwal"
+output: html_document
+---
+
+<style type="text/css">
+
+body, td {
+   font-family: Segoe UI Light;
+   font-size: 20px;
+}
+</style>
+
+While going through my blog on [Vislauzaing Plane Crash Data](http://brazenly.blogspot.in/2016/04/r-visualizing-plan-crash-data-using.html) , one of my friends asked me if to try and plot the **Flight Routes of Crashed Planes on a 3-D view of Earth**. 
+
+As interesting as it sounds, this was certainly an excellent suggestion and I started exploring web to find out some R package which could help me achieve this feat. Finally I found the package `threejs` which could do this easily.
+
+Let us see how it can be done .
+
+
+```{r setup}
+#
+# As always, install and load the requisite packages first
+#
+#
+#
+list.of.packages <- 
+  c("geosphere", # For spatial methods  
+    "threejs",   # threejs is used for 3-D interactive Earth Visualization
+    "rworldmap", # For creating earth map
+    "leaflet",   # Leaflet for R provides functions to control and integrate Leaflet, a JavaScript library for interactive maps, within R.
+    "rgeos",      # Provides functions for handling operations on topologies.
+    "raster",     # For raster image
+    "DT",         # For creating interactive tables
+    "ggplot2",
+    "sp"   ,       # For Spatial processing of data
+    "ggmap",       # To reverse geocode Long/Lat
+    "knitr",        # TO enable 3-D visualization embedding in the HTML page
+    "rglwidget",
+    "rgl"
+    )
+#
+#You should be able to simply reuse the following lines of code as is
+#
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+#
+if(length(new.packages)) suppressMessages(suppressWarnings(install.packages(new.packages)))
+#
+# By now we have installed the requisite packages. Time to load them .
+#
+lapply(list.of.packages,function(x){suppressMessages(suppressWarnings(library(x,character.only=TRUE)))})
+#
+# Set this property to enable 3-D visualization
+#
+knit_hooks$set(webgl = hook_webgl)
+```
+
+Based on the source and destination of a flight from the flights data (Refer my [BLOG](http://brazenly.blogspot.in/2016/04/r-visualizing-plan-crash-data-using.html) for details around plane crash data), I gecoded the Source and Destination addresses using [Google Geocoding API](https://www.google.co.in/url?sa=t&rct=j&q=&esrc=s&source=web&cd=1&cad=rja&uact=8&ved=0ahUKEwjp_5LXitzMAhVMto8KHf9fDw4QFggbMAA&url=https%3A%2F%2Fdevelopers.google.com%2Fmaps%2Fdocumentation%2Fgeocoding%2Fintro&usg=AFQjCNEoQp87kztDFCchzqbJULtBHeHOOA&sig2=euc_hvwlDJC15f75uQvSvA&bvm=bv.122129774,d.c2I).
+
+I will load the geocoded addresses for source and destination (limiting it to 1000 addresses to avoid cluttering of paths) and will visualize the paths and source and destination location using various spatial methods inclusing the 3-D interactive visualization of paths.
+
+
+
+```{r}
+#
+# Read the file
+#
+input_data<-read.csv("C:\\PB Backup\\R\\Great_Circles.csv", header = TRUE, stringsAsFactors = FALSE)
+#
+str(input_data)
+#
+#
+head(input_data)
+#
+#
+# Let us use the function datatable that creates an HTML widget to display rectangular data (a matrix or data frame) using JavaScript using package DT
+#
+datatable(input_data, rownames = FALSE)
+#
+#
+#
+```
+
+
+### Converting data to Spatial Format
+
+While the purpose of the blog is to create a 3-D visualization of Flight routes, let us do some basic Spatial Data processing to get some understanding of Spatial Analytics in R
+
+```{r}
+#
+# Converting Data to spatial objects
+#
+source_df<-data.frame(SourceLong=input_data$SourceLong,SourceLat=input_data$SourceLat)
+#
+# Create object of class SpatialPoints using SpatialPoints function from sp package
+#
+source_sp<-SpatialPoints(source_df, proj4string=CRS("+proj=longlat"))
+#
+#
+str(source_sp)
+#
+head(source_sp)
+#
+# Convert to Spatial Dataframe
+#
+source_spdf <- SpatialPointsDataFrame(source_sp, data = source_df)
+#
+str(source_spdf)
+#
+head(source_spdf)
+#
+# Similarly for the Destination Locations
+# Converting Data to spatial objects
+#
+dest_df<-data.frame(DestLong=input_data$DestLong,DestLat=input_data$DestLat)
+#
+# Create object of class SpatialPoints using SpatialPoints function from sp package
+#
+dest_sp<-SpatialPoints(dest_df, proj4string=CRS("+proj=longlat"))
+#
+# Convert to Spatial Dataframe
+#
+dest_spdf <- SpatialPointsDataFrame(dest_sp, data = dest_df)
+
+```
+
+### Calculating DIstance between the Source and Destination and the bearing between the Source and Destination
+
+I'll create the distance and bearing of each source location from the respective destination location using the `distHaversine` and `bearing` functions from `geosphere` package.
+
+**Bearing**: A [bearing](http://geospatial.institute/gsp101/lesson-5/7/) is the angular difference away from a north or south baseline, ranging from 0° to 90°. Determining your bearing begins with a north or south baseline, whichever is closer to your direction. The angle is then measured east or west from the baseline.
+
+
+```{r}
+#
+# Create a Combined data frame for display purpose only
+#
+comb_df<-data.frame(input_data)
+#
+# Calculate distance between Source and Destination
+#
+comb_df$distance<-distHaversine(source_sp,dest_sp)
+#
+comb_df$bearing<-bearing(dest_sp,source_sp)
+#
+# Display the combined dataframe using interactive table 
+#
+datatable(comb_df, rownames = FALSE)
+```
+
+
+Let us prepare a simple plot of Source and Destination location 
+
+```{r}
+#
+# Plot source points
+#
+plot(comb_df[1:2],col= "red", pch = 3,xlab="",ylab="")
+#
+# Add Destination points
+#
+points(comb_df[3:4],col="blue")
+```
+
+USA (primarily East Coast) and Europe are seemingly worst hit by plane crashes as appear from the graph.
+
+A better visual can be created using `rworldmap` package and `ggplot2` package
+
+```{r}
+#
+(worldMap <- getMap() )   # rworldmap function to get Long/Lat Polygon data for all countries 
+#
+world.points <- fortify(worldMap)  # Convert data into dataframe using fortify from ggplot2
+#
+#
+head(world.points)
+#
+world.points$region <- world.points$id
+#
+world.df <- world.points[,c("long","lat","group", "region")]
+#
+worldmap <- ggplot() + 
+  geom_polygon(data = world.df, aes(x = long, y = lat, group = group)) +
+  geom_point(aes(x=comb_df[,1], y=comb_df[,2]),color="yellow", size=1) +  # Plot Source Locations
+  geom_point(aes(x=comb_df[,3], y=comb_df[,4]),color="green", size=1) +  # Plot Dest Location
+  scale_y_continuous(breaks = (-2:2) * 30) +
+  scale_x_continuous(breaks = (-4:4) * 45) +
+  theme_bw() +
+  theme(axis.line = element_line(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_blank(),
+    panel.background = element_blank())
+#
+worldmap
+```
+
+By adding the coord_map line to the ggplot call we can transform the map projection to a globe.
+
+```{r}
+
+worldmap +coord_map("ortho", orientation=c(40, -40, -10))+theme(panel.background = element_rect(fill = 'gray', colour = 'white'), panel.grid.major = element_line(color = "white"),
+    panel.grid.minor = element_line(color = "white"))
+
+
+```
+
+
+By changing the parameters of the coord_map function we can change the map projection. Lots of information about map projections can be found [here](http://www.progonos.com/furuti/MapProj/Normal/CartProp/Geodesic/geodesic.html).
+
+The azimuthal equidistant projection is of particular interest to this task as it can include the whole world and correctly shows distances and directions. Great circles (shortest paths between two points on a globe) will apear as straight lines on this projection.
+
+Here I plot the sample points on an azimuthal equidistant projection with the North Pole at the centre of the map. (To avoid a polygon rendering difficulty with this particular projection I've removed the Antartica polygon)
+
+
+```{r}
+worldmap <- ggplot() + 
+  geom_polygon(data = world.df[world.df$region != 'Antarctica',], aes(x = long, y = lat, group = group)) +
+  geom_point(aes(x=comb_df[,1], y=comb_df[,2]),color="yellow", size=1) +  # Plot Source Locations
+  geom_point(aes(x=comb_df[,3], y=comb_df[,4]),color="green", size=1) +  # Plot Dest Location 
+  scale_y_continuous(breaks = (-2:2) * 30) +
+  scale_x_continuous(breaks = (-4:4) * 45) +
+  coord_map("azequidist",orientation=c(90, 0, 0))+
+  theme(panel.background = element_rect(fill = 'azure3'))
+#
+worldmap
+
+```
+
+
+
+### Reverse Geocoding 
+
+Let us reverse geocode the Lat/Long information of these 50 most frequent source locations to get the name of the cities using `revgeocode` function from `ggmap` package that calls Google API for reverse-geocoding
+
+```{r}
+# Let us also plot top 50 such Source locations from where the flights crahsed frequently
+#
+# Approximate locations as factors rounding off Long / Lat to 2 decimal places
+#
+source_da   <- factor(sprintf("%.2f:%.2f",comb_df[,2], comb_df[,1]))
+#
+str(source_da)
+#
+head(source_da)
+#
+# A table of Source frequencies
+#
+freq <- sort(table(source_da), decreasing=TRUE)
+#
+# The most frequent source airports in these data, possibly airports like NYC, London, Paris ?
+#
+frequent_destinations <- names(freq)[1:50]
+#
+# Subset the flight data by source frequency
+#
+idx <- source_da %in% frequent_destinations
+#
+# Get the Long Lat data for source airports having most crash frequency
+#
+LongLat <- unique(comb_df[idx,1:2])
+#
+frequent_flights <-comb_df[idx,]
+#
+str(LongLat)
+#
+head(LongLat)
+#
+# Call Reverse Geocoding function
+#
+result <- suppressMessages(suppressWarnings(do.call(rbind,
+                  lapply(1:nrow(LongLat),
+                         function(i)revgeocode(as.numeric(LongLat[i,1:2])))) ))
+
+#
+# Let us see the output 
+#
+datatable(subset(result,result != 'NA'))
+#
+
+```
+
+
+### Creating 3-D Interactive Globe
+
+Now we will have some fun with a 3d interactive globe of Flight Route locations using the threejs library to render a 3d globe.
+
+We will Plot frequent source airports (top 50 calculated above) as bars, and their flights routes as arcs. Adjust arc width and color by frequency.
+
+```{r teste,webgl=TRUE}
+#
+#
+(earth <- system.file("images/world.jpg",  package="threejs")) # Get the image of globe
+#
+# 3-D visual Dataframe
+#
+test_df <- data.frame(origin_lat = frequent_flights[,2], origin_long = frequent_flights[,1], dest_lat = frequent_flights[,4], dest_long = frequent_flights[,3])
+#
+globejs(img=earth, lat=LongLat[,2], long=LongLat[,1], arcs=test_df,
+        arcsHeight=0.3, arcsLwd=2, arcsColor="#ffff00", arcsOpacity=0.15,
+        atmosphere=TRUE, height=800, width = 800)
+
+```
+
+<span style="color:red; font-family:Georgia; font-size:1em;"> You can click on the Globe and drag it to rotate it. Try it out. </span>
+
+We can plot paths of all the Flight Routes (1000 that we have) as well. Let us see how it looks
+
+```{r testd,webgl=TRUE}
+#
+#
+(earth <- system.file("images/world.jpg",  package="threejs")) # Get the image of globe
+#
+# 3-D visual Dataframe
+#
+test_df <- data.frame(origin_lat = comb_df[,2], origin_long = comb_df[,1], dest_lat = comb_df[,4], dest_long = comb_df[,3])
+#
+globejs(img=earth, lat=LongLat[,2], long=LongLat[,1], arcs=test_df,
+        arcsHeight=0.3, arcsLwd=2, arcsColor="red", arcsOpacity=0.15,
+        atmosphere=TRUE,bg="white", height = 800 , width = 800)
+
+```
+
+<span style="color:red; font-family:Georgia; font-size:1em;"> You can click on the Globe and drag it to rotate it. Try it out. </span>
+
+Hope you have enjoyed this 3-D visualization of Globe.

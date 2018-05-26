@@ -1,0 +1,546 @@
+---
+title: 'R : Statistical Analysis (Hypothesis Testing)'
+author: "Ankit Agarwal"
+output: html_document
+---
+
+<style type="text/css">
+
+body, td {
+   font-family: Segoe UI Light;
+   font-size: 20px;
+}
+</style>
+
+
+With so many different types of Statistical Tests for Hypothesis Testing, it becomes a nighmare for a non-statistical guy like me to identify the right test for a specific scenario. Thus I decided to take a stab at it and write this detailed blog around performing a number of Statistical Tests using R. Each section gives a brief description of the - 
+
+* aim of the statistical test, 
+* when it is used, 
+* an example showing the R commands and 
+* R (often abbreviated) output with a brief interpretation of the output
+
+It is easier to understand the differences between different tests if we use the same input data to differentiate the methodology/functioning of a test as compared to another. Hence I would try and perform most of the tests on the same set of data.
+
+### [Input Data Set]("http://www.ats.ucla.edu/stat/data/hsb2.csv")
+
+### Here is a brief overview of the Dataset -
+
+This data file (hsb) contains 200 observations from a sample of high school students with demographic information about the students, such as their gender (female), socio-economic status (ses) and ethnic background (race). It also contains a number of scores on standardized tests, including tests of reading (read), writing (write), mathematics (math) and social studies (socst).
+
+### Snapshot Summary of the Dataset
+
+![](https://drive.google.com/file/d/0BysOAoDBj2wKTlNCNTJIa2lZR2M/view?usp=sharing) 
+
+***
+
+### Load and Attach the Input Data-set for performing tests
+
+```{r}
+hsb2 <- within(read.csv("http://www.ats.ucla.edu/stat/data/hsb2.csv"), {
+    race <- as.factor(race)
+    schtyp <- as.factor(schtyp)
+    prog <- as.factor(prog)
+})
+
+attach(hsb2)
+#
+#
+head(hsb2,20)
+#
+#
+str(hsb2)
+#
+#
+summary(hsb2)
+#
+```
+
+***
+
+### One Sample t-test
+
+A one sample t-test allows us to test whether a sample mean (of a **normally** distributed interval variable) significantly differs from a hypothesized value. For example, using the hsb data file, say we wish to test whether the average writing score (write) differs significantly from 50. Test variable writing score (write), Test value 50. We can do this as shown below.
+
+```{r}
+#
+# Our given mean is 50 (mu=50)
+#
+t.test(write, mu = 50)
+
+```
+
+As we can notice from the p-value (p-value = 5.121e-05) , which is way less than .05 , that the difference between the average writing score (write) differs significantly from 50 thus confirming the alternative Hypothesis.
+
+The mean of the variable write for this particular sample of students is 52.775, which is statistically significantly (p<.001) different from the test value of 50. We would conclude that this group of students has a significantly higher mean on the writing test than 50. This is consistent with the reported confidence interval (51.45,54.10) which excludes 50, of course the mid-point is the mean. 
+
+### Cohen's d Effect Size Statistics
+
+It is often helpful to quantify the extent of a difference that exists between two
+independent groups, as this can suggest the practical significance of
+observed differences. While we have observed and confirmed above that writing test of students is significantly higher than mean value of 50. We can also calculate Cohen's d measure to calculate the impact of this difference. 
+
+There are 2 formulae to calculate Cohen's d value in this case -
+
+```{r}
+#
+# Cohen's d = t-value / squareroot(sample size)  -- Sample size is 200 in our case
+#
+ttest <- t.test(write, mu = 50)
+#
+(cohd<- ttest$statistic / sqrt(length(write)))
+#
+# Another Formula for Cohen's d is : d = Mean Difference / SD
+#
+(cohd<- (ttest$estimate-50) / sd(write))
+#
+```
+
+We get Cohen's d value = 0.2927634 which is a small-to-medium effect overall.
+
+##### **Cohen's d value interpretation -**
+
+d evaluates the degree that the mean on the test variable differs from the test value in standard deviation units. Potentially, d can range in value from negative infinity to positive infinity. If d equals 0, the mean of the scores is equal to the test value. As d deviates from 0, we interpret the effect size to be stronger. What is a small versus a large d is dependent on the area of investigation. However, d values of .2, .5 and .8, regardless of sign, are by convention interpreted as small, medium, and large effect sizes, respectively.
+
+
+#### **Summary** of t-test and Cohen's d estimate -
+A one-sample t test was conducted to evaluate whether the mean of the writing scores was significantly different from 50, the accepted mean. The sample mean of 52.78 ( SD = 9.48) was significantly different from 50, t(199) = 4.14, p < .001. The 95% confidence interval for the writing scores mean ranged from 51.45 to 54.10. The effect size d of .29 indicates a medium effect.
+
+***
+
+### One Sample median test (Wilcox Test)
+
+A one sample median test allows us to test whether a sample median differs significantly from a hypothesized value. We will use the same variable, write, as we did in the one sample t-test example above. But we do not need to assume that it is interval and normally distributed (we only need to assume that write is an **numerical** variable). 
+
+
+```{r}
+#
+wilcox.test(write, mu = 50)
+#
+```
+
+*Notice that instead of a calculated t value, this test computes V.*
+
+With a p-value = 3.702e-05, we can confirm that alternative hypothesis is correct,i.e., write scores significanctly differ from the median value of 50.
+
+***
+
+
+### Binomial test
+
+A one sample binomial test allows us to test whether the proportion of successes on a two-level categorical dependent variable significantly differs from a hypothesized value. For example, using the hsb2 data file, say we wish to test whether the proportion of females (female) differs significantly from 50%, i.e., from .5
+
+```{r}
+#
+prop.test(sum(female), length(female), p = 0.5)
+#
+```
+
+
+** Output ** : The results indicate that there is no statistically significant difference (p-value= 0.229). In other words, the proportion of females in this sample does not significantly differ from the hypothesized value of 50%. 
+
+#### **Summary** of Binomial-Test -
+
+We hypothesized that the proportion of females is 50%. A two-tailed, binomial test was conducted to assess this research hypothesis. The observed proportion of .455 did not differ significantly from the hypothesized value of .50, two-tailed p = .23. Our results suggest that the proportion of females do not differ dramatically from males.
+
+
+*Note* : Do not confuse **prop.test** with **prop.table**. While the prior is used for Binomial test, the latter is used to calculate percentage distribution in a factor/categorical variable. This is what we would get by using prop.table (percentage of males and females in the class)
+
+```{r}
+#
+# 0 = Male , 1 = Female
+#
+prop.table(table(female))*100
+
+
+```
+
+***
+
+### Chi-square goodness of fit
+
+A chi-square goodness of fit test allows us to test whether the observed proportions for a categorical variable differ from hypothesized proportions. For example, let's suppose that we believe that the general population consists of 10% Hispanic, 10% Asian, 10% African American and 70% White folks. We want to test whether the observed proportions from our sample differ significantly from these hypothesized proportions. Note this example employs input data (10, 10, 10, 70), in addition to input data from hsb2 file.
+
+
+```{r}
+#
+# Let us look at the race statistics
+table(race)
+#
+# 1 = Hispanic , 2= Asian, 3= African American, 4= White 
+#
+chisq.test(table(race), p = c(10, 10, 10, 70)/100)
+
+```
+
+#### **Summary** of output -
+
+These results show that racial composition in our sample does not differ significantly from the hypothesized values that we supplied (chi-square with three degrees of freedom = 5.029, p-value = 0.170).
+
+
+***
+
+### Two independent samples t-test
+
+An independent samples t-test is used when you want to compare the means of a normally distributed interval dependent variable for two independent groups. For example, using the hsb2 data file, say we wish to test whether the **mean for write is the same for males and females**.
+
+
+```{r}
+#
+# Let us look at the write data viz-a-viz the female data
+#
+(checkdata<-table(write,female))
+#
+# How about plotting this to get a better understanding (0=Male, 1=Female)
+#
+plot(checkdata, col=c("lightgray", "darkgray"),  ylab="Gender(0=Male,1=Female)", xlab="Writing Scores",main="Writing Score by Gender(Female/Male)")
+#
+# Let us now perform the test
+# Note that tilde (~) is used here in place of comma as female is a categorical variable
+#
+t.test(write ~ female)
+
+```
+
+
+#### **Summary** of output -
+
+The results indicate that there is a statistically significant difference between the mean writing score for males and females (t=-3.656, p-value = 0.0003409). In other words, females have a statistically significantly higher mean score on writing (54.99) than males (50.12). 
+
+This is also supported by the negative confidence interval ( -7.499159 -2.240734) which is calculated as (male - female).
+
+
+***
+
+### Wilcoxon-Mann-Whitney test
+
+The Wilcoxon-Mann-Whitney test is a non-parametric analogous to the independent samples t-test and can be used when you **do not assume that the dependent variable is a normally distributed interval variable (you only assume that the variable is at least numerical)**.
+
+We will use the same data file (the hsb2 data file) and the same variables in this example as we did in the independent t-test example above. We will not assume that **write**, our dependent variable, is normally distributed and our purpose is again to test whether the **mean for write is the same for males and females**.
+
+
+```{r}
+#
+# Let us perform Wilcoxon-Mann-Whitney the test
+#
+wilcox.test(write ~ female)
+
+```
+
+
+The results suggest that there is a statistically significant difference between the underlying distributions of the write scores of males and the write scores of females (p-value=0.0008749). 
+
+#### **Summary** of output -
+
+A Wilcoxon test was conducted to evaluate whether writing score was affected by gender. The results indicated a significant difference .
+
+***
+
+### Chi-square test( Contingency Table)
+
+A chi-square test is used when you want to see if there is a relationship between two categorical variables. It is equivalent to the correlation between nominal(continuous) variables
+
+**Note: chi-square test assumes that each category has an expected frequency of five or more**
+
+A chi-square test is a common test for nominal (categorical) data. One application of a chi-square test is a test for independence. In this case, the null hypothesis is that the occurrence of the outcomes for the two groups is equal. If your data for two groups came from the same participants (i.e. the data were paired), you should use the **McNemar's test**, while for k groups you should use **Cochran's Q test**.
+
+Using the hsb2 data file, let's see if there is a relationship between the type of school attended (schtyp) and students' gender (female). 
+
+
+```{r}
+#
+# Let us look at the school-type data viz-a-viz the female data
+#
+(checkdata<-table(schtyp,female))
+#
+# Percentage of students in different school types based on their genders can be given my following formula
+#
+prop.table(table(schtyp,female),2)
+#
+# How about plotting this to get a better understanding female-(0=Male, 1=Female),schtype- (1=Public,2=Private)
+#
+barplot(checkdata, col=c("lightgray", "darkgray"),
+        legend=rownames(checkdata), ylab="count", xlab="Gender (0=Male, 1=Female)", beside=TRUE)
+#
+# Let us now perform the test
+#
+chisq.test(table(female, schtyp))
+
+```
+
+These results indicate that there is no statistically significant relationship between the type of school attended and gender (chi-square with one degree of freedom=0.00054009, p=0.9815).
+
+#### **Summary** of output -
+
+A two-way contingency table analysis was conducted to evaluate whether type of school exhibited a gender bias. School and gender were found to not be significantly related, Pearson X^2^ (1, N = 200) = 0.00054009, p = 0.9815.
+
+
+> Let's look at another example of Chi-Square Test.
+
+this time looking at the relationship between gender (female) and socio-economic status (ses). The point of this example is that one (or both) variables may have more than two levels, and that the variables do not have to have the same number of levels. In this example, female has two levels (male and female) and ses has three levels (low, medium and high). 
+
+```{r}
+#
+# Let us look at the socio-economic status data viz-a-viz the female data
+#
+(checkdata<-table(ses,female))
+#
+# Percentage of students of different socio-economic status based on their genders can be given my following formula . Here 2 is used to calculate proportions column-wise
+#
+prop.table(table(ses,female),2)
+#
+# How about plotting this to get a better understanding female-(0=Male, 1=Female),ses- (1=Low,2=Medium,3=High)
+#
+barplot(checkdata, col=c("red", "blue","green"),
+        legend=rownames(checkdata), ylab="count", xlab="Gender (0=Male, 1=Female)", beside=TRUE)
+#
+# Let us now perform the test
+#
+chisq.test(table(female, ses))
+
+```
+
+Again we find that there is no statistically significant relationship between the variables (chi-square with two degrees of freedom=4.577, p-value=0.101). 
+
+A two-way contingency table analysis was conducted to evaluate whether gender was related to social economic status (SES). Gender and SES were not found to be significantly related, Pearson X^2^ (2, N = 200) = 4.58, p = .101 .
+
+
+***
+
+
+### Fisher's exact test
+
+The Fisher's exact test is used when you want to conduct a chi-square test but one or more of your cells has an expected frequency of five or less. *Remember that the chi-square test assumes that each cell has an expected frequency of five or more*. Fisher's exact test has no such assumption and can be used regardless of how small the expected frequency is. 
+
+It is appropriate to use the Fisher's exact test ** when the table you create is 2 × 2 **, that is, when both variables have two categories, and/or your expected cell sizes are small (< 5). In cases where the tables are larger, for example one variable has two categories and another has three, you would use the chi-square test (as we have seen above).
+
+
+Let us use the same example that we used above for Ch-Square test.
+
+Using the hsb2 data file, let's see if there is a relationship between the type of school attended (schtyp) and students' gender (female). 
+
+
+```{r}
+#
+# Let us look at the school-type data viz-a-viz the female data
+#
+(checkdata<-table(schtyp,female))
+#
+# Percentage of students in different school types based on their genders can be given my following formula
+#
+prop.table(table(schtyp,female),2)
+#
+# How about plotting this to get a better understanding female-(0=Male, 1=Female),schtype- (1=Public,2=Private)
+#
+barplot(checkdata, col=c("yellow", "orange"),
+        legend=rownames(checkdata), ylab="count", xlab="Gender (0=Male, 1=Female)", beside=TRUE)
+#
+# Let us now perform the test
+#
+fisher.test(table(schtyp,female))
+
+```
+
+These results indicate that there is no statistically significant relationship between the type of school attended and gender (p=0.8492).
+
+#### **Summary** of output -
+
+A two-way contingency table analysis was conducted to evaluate whether type of school exhibited a gender bias. School and gender were found to be NOT significantly related (p = 0.8492) .
+
+***
+
+
+
+### One-way ANOVA
+
+A one-way analysis of variance (ANOVA) is used when you have a categorical independent variable (with two or more categories) and a normally distributed interval dependent variable. You wish to test for differences in the means of the dependent variable broken down by the levels of the independent variable. 
+
+*Note: I would highly recommend this [video]("https://www.youtube.com/watch?v=-yQb_ZJnFXw") for a good understanding of ANOVA*
+
+For example, using the hsb2 data file, say we wish **to test whether the mean of write differs between the three program types (prog). **
+
+
+```{r}
+#
+# Let us look at the write data viz-a-viz the prog type data
+# Prog : (1=General, 2= Academic, 3=Vocation)
+#
+(checkdata<-table(write,prog))
+#
+# How about plotting this to get a better understanding 
+#
+plot(checkdata, col=c("green2", "blue1","yellow2"),  ylab="Prog Type (1=General, 2= Academic, 3=Vocation)", xlab="Writing Scores",main="Writing Score by Program Type")
+#
+# Let us now perform the test
+#
+aov(write ~ prog)
+#
+# Summarizing the results
+#
+summary(aov(write ~ prog))
+```
+
+#### **Summary** of output -
+
+A one-way analysis of variance was conducted to evaluate the relationship between writing score and the type of program. The independent variable, the type of program, included three levels, general, academic and vocation. The dependent variable was the writing score. The ANOVA was significant at the .05 level, p-value = 4.31e-09 , F-Value (2,197)= 21.27 .
+
+We can say that mean of write differs significantly between the three program types (prog).
+
+***
+
+### Kruskal Wallis test
+
+The Kruskal Wallis test is used when you have **one independent variable with two or more levels and an ordinal continuous dependent variable**. In other words, **it is the non-parametric version of ANOVA** and **a generalized form of the Mann-Whitney test method**, since it permits two or more groups. We will use the same data file as the one way ANOVA example above (the hsb2 data file) and the same variables (writing scores and program types) as in the example above, but we will not assume that write is a normally distributed interval variable.
+
+*Note: One-way Anova requires a categorical independent variable (with two or more categories) and a normally distributed interval dependent variable.Mann-Whitney test requires one independent variable with NOT MORE THAN two levels and an ordinal continuous dependent variable*
+
+Again, same as above,using the hsb2 data file, say we wish **to test whether the mean of write differs between the three program types (prog). **
+
+
+```{r}
+#
+# Let us look at the write data viz-a-viz the prog type data
+# Prog : (1=General, 2= Academic, 3=Vocation)
+#
+(checkdata<-table(write,prog))
+#
+# Let us now perform the test
+#
+kruskal.test(write, prog)
+```
+
+The results indicate that there is a statistically significant difference p-value = 4.047e-08 (p < .0005) among the three type of programs. 
+
+
+#### **Summary** of output -
+
+A Kruskal-Wallis test was conducted to evaluate differences among the three types of program (general, academic and vocation) on median change in the writing score). The test, which was corrected for tied ranks, was significant, X^2^ (2, n = 200) = 34.045, p-value = 4.047e-08 (p < .001). Very low p-value signifies a fairly strong relationship between type of program and writing score.
+
+
+***
+
+
+### Paired t-test
+
+A paired (samples) t-test is used when you have **two related observations** (i.e., two observations per subject) and you want to see **if the means on these two normally distributed interval variables differ from one another**. 
+
+For example, using the hsb2 data file we will test **whether the mean of read scores is equal to the mean of write scores**
+
+
+```{r}
+#
+# Let us look at the Read Scores vs Write Scores on a plot
+#
+plot(write, col=c("blue"),  type="l",ylab="Scores", xlab="Read Vs Write",main="Read and Write Scores")
+lines(read,col="red")
+#
+# It is visible that read and write scores are somewhat co-related
+#
+# Let us now perform the paired t-test
+#
+(ttest<-t.test(write, read, paired = TRUE))
+#
+# Cohen's d = t-value / squareroot(sample size)  -- Sample size is 200 in our case
+#
+(cohd<- ttest$statistic / sqrt(length(write)))
+#
+```
+
+These results indicate that the mean of read is not statistically significantly different from the mean of write 
+(t=0.867, p-value = 0.3868). 
+ 
+
+#### **Summary** of output -
+
+A paired-samples t test was conducted to evaluate whether reading and writing scores were related. The results indicated that the mean score for writing was not significantly greater than the mean score for reading , t (199) = 0.86731, p = 0.3868. The standardized effect size index, d , was .06, which is pretty low. The 95% confidence interval for the mean difference between the two ratings was -0.69 to 1.78.
+
+***
+
+
+### Wilcoxon signed rank sum test
+
+The Wilcoxon signed rank sum test is the **non-parametric version of a paired samples t-test**. You use the Wilcoxon signed rank sum test when you do not wish to assume that the difference between the two variables is interval and normally distributed (but you do assume the difference is ordinal/continuous). 
+
+We will use the same example as above, **but we will not assume that the difference between read and write is interval and normally distributed.**
+ 
+Again, using the hsb2 data file we will test **whether the mean of read scores is equal to the mean of write scores**
+
+
+```{r}
+# Let us now perform the Wilcoxon signed rank sum test
+#
+wilcox.test(write, read, paired = TRUE)
+```
+
+
+#### **Summary** of output -
+
+The results suggest that there is not a statistically significant difference (p-value = 0.3666) between read and write scores.
+
+***
+
+### Sign test
+
+If you believe the differences between read and write were not ordinal but could merely be classified as positive and negative, then you may want to consider a sign test in lieu of sign rank test. The Sign test answers the question **"How Often?"**, whereas other tests answer the question "How Much?". 
+
+We will use the same example as above, **and assume that this difference is not ordinal**
+ 
+Again, using the hsb2 data file we will test **how often the mean of read scores is equal to the mean of write scores**
+
+
+```{r}
+#
+#
+test<-as.data.frame(cbind(write,read))
+#
+# Capture number of times when Write Score is greater than Read Score
+#
+length(which(test$write > test$read))
+#
+# Let us now perform the Sign Test
+#
+binom.test(length(which(test$write > test$read)),n=200) 
+```
+
+
+#### **Summary** of output -
+
+We conclude that no statistically significant difference between the scores was found (p-value = 0.7238). 
+
+
+***
+
+
+### McNemar test
+
+There is often a need to test change in a dichotomous variable (yes/no) before and after an intervention. A standard chi-square cannot be used because it assumes that the groups are independent. Obviously, this is not the case when you are testing same set of students for their scores in different subjects (or for example in medicinal science when you are testing clients' pre- and post-intervention scores).
+
+**Here is an example used-case of when McNemar Test is used** - An outpatient clinic treating patients diagnosed with lupus develops an intervention to help increase medication compliance. Twenty clients are selected to receive daily texts from the clinic reminding them to take their medication. Prior to the intervention, the patients are asked a simple yes/no question, "Are you taking your medication on a daily basis?" They are asked the same question 6 weeks later. The question to test is as follows: Is the patient's rate of daily compliance (answering yes to the
+question) higher after the intervention?
+
+For our this blog, to make it easier for understanding, we would continue with the hsb2 dataset used in several above examples. Let us create two binary outcomes in our dataset: himath (Students with Math scores greater than 60) and hiread (Students with Read scores greater than 60). These outcomes can be considered in a two-way contingency table. 
+
+The null hypothesis is that the proportion of students in the himath group is the same as the proportion of students in hiread group (i.e., that the contingency table is symmetric). 
+
+
+```{r}
+#
+# Prepare a 2X2 contigency table between himath and hiread
+#
+(t<-prop.table(table(himath=math>60,hiread=read>60))*100)
+#
+# Let us now perform the McNemar Test
+#
+mcnemar.test(t) 
+```
+
+
+#### **Summary** of output -
+
+McNemar's chi-square statistic suggests that there is not a statistically significant difference in the proportion of students in the himath group and the proportion of students in the hiread group ( p-value = 0.9099). 
+
+
+
+***
+
+Hoefully this should give a good basic understandic of the Statistical Techniques used for Hypothesis testing which lay the foundation of the Statistical Analysis of Data.
