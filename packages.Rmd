@@ -1,0 +1,88 @@
+---
+title: "Automate Uninstall, detach, install and attaching of packages"
+
+output: html_document
+---
+
+<style type="text/css">
+
+body, td {
+   font-family: Segoe UI Light;
+   font-size: 20px;
+}
+</style>
+
+#### In this Blog I will be sharing simple commands to automate Uninstall, Attach, Detach and Install of packages
+
+Here are some smart ways to make your code concise, less error-prone and automate some of the activities in a beautified coding manner. Let me take an example of detaching, uninstalling and installing a package `rvest` .
+
+### Detaching the package
+
+
+```{r  warning=FALSE}
+
+# Let us first see what are the packages attached in current session
+
+search()
+
+# As we can see that rvest is currently attached. Let us detach it using the following command
+
+detpack = c("package:rvest")
+
+if (detpack %in% search()) { detach(detpack, unload=TRUE,character.only = TRUE) }
+
+```
+
+`rvest` package has been detached successfully.
+
+## Uninstalling the package
+
+In order to update a package, it has to be uninstalled first before installing the fresh version of package. Here we will uninstall `rvest` package using some simple effective commands
+
+```{r  message=FALSE, warning=FALSE}
+
+# First step is to get the list of installed packages which can be retrieved using installed.packages() command
+#
+# Let us see the sample output of the command
+#
+head(installed.packages())
+#
+# Check if rvest is among the installed packages, remove it
+#
+
+if ("rvest" %in% rownames(installed.packages())) { remove.packages("rvest") }
+
+```
+
+
+`rvest` package has been successfully uninstalled.
+
+
+## Installing and initialize the package
+
+Here we will uninstall and initialize `rvest` package using following commands
+
+```{r}
+
+# Now we download and install rvest for R.
+
+EnsurePackage<-function(x)
+{
+  x<-as.character(x)
+  #
+  if (!require(x,character.only=TRUE))   # character.only tells require that x should have only character string
+  {
+    install.packages(pkgs=x,dependencies = TRUE)
+    require(x,character.only=TRUE)
+  }
+}
+
+EnsurePackage("rvest")
+
+#
+
+
+```
+
+
+## I hope you like this clean way of detaching, uninstalling, installing and initialize packages in R to make your program standardized and modularized.
